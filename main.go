@@ -26,19 +26,16 @@ type Config struct {
 
 // Model represents the TUI state
 type model struct {
-	bookmarks []Bookmark
-	filtered  []int // indices into bookmarks
-	cursor    int
-	filter    string
-	editing   bool
-	editValue string
+	bookmarks    []Bookmark
+	filtered     []int // indices into bookmarks
+	cursor       int
+	filter       string
+	editing      bool
+	editValue    string
+	selectedPath string // path to cd to after quit
 }
 
 var (
-	selectedStyle = lipgloss.NewStyle().
-			Background(lipgloss.Color("62")).
-			Foreground(lipgloss.Color("230")).
-			Padding(0, 1)
 	normalStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 	dimStyle = lipgloss.NewStyle().
@@ -48,6 +45,10 @@ var (
 			Foreground(lipgloss.Color("214")).
 			Bold(true)
 )
+
+func renderSelected(s string) string {
+	return " \x1b[7m" + s + "\x1b[0m "
+}
 
 func getConfigPath() string {
 	home, _ := os.UserHomeDir()
@@ -173,7 +174,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.bookmarks[idx].Count++
 				config := Config{Bookmarks: m.bookmarks}
 				saveConfig(config)
-				fmt.Println(m.bookmarks[idx].Path)
+				m.selectedPath = m.bookmarks[idx].Path
 				return m, tea.Quit
 			}
 		case tea.KeyBackspace:
@@ -258,10 +259,10 @@ func (m model) View() string {
 
 			if i == m.cursor {
 				if b.Name != "" {
-					s += selectedStyle.Render(fmt.Sprintf("> %s", displayName))
+					s += renderSelected(fmt.Sprintf("> %s", displayName))
 					s += dimStyle.Render(fmt.Sprintf(" %s", b.Path))
 				} else {
-					s += selectedStyle.Render(fmt.Sprintf("> %s", displayName))
+					s += renderSelected(fmt.Sprintf("> %s", displayName))
 				}
 			} else {
 				if b.Name != "" {
@@ -333,9 +334,23 @@ func main() {
 		}
 	}
 
-	p := tea.NewProgram(initialModel())
-	if _, err := p.Run(); err != nil {
+	// Open /dev/tty for TUI so it works even when stdout is captured
+	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening tty: %v\n", err)
+		os.Exit(1)
+	}
+	defer tty.Close()
+
+	p := tea.NewProgram(initialModel(), tea.WithInput(tty), tea.WithOutput(tty))
+	m, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Print selected path to stdout (captured by shell function)
+	if finalModel, ok := m.(model); ok && finalModel.selectedPath != "" {
+		fmt.Println(finalModel.selectedPath)
 	}
 }
