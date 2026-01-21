@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -39,15 +40,14 @@ var (
 	normalStyle = lipgloss.NewStyle().
 			Padding(0, 1)
 	dimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("241")).
-			Padding(0, 1)
+			Foreground(lipgloss.Color("245"))
 	filterStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("214")).
 			Bold(true)
 )
 
 func renderSelected(s string) string {
-	return " \x1b[7m" + s + "\x1b[0m "
+	return "\x1b[7m" + s + "\x1b[0m"
 }
 
 func getConfigPath() string {
@@ -141,6 +141,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.editValue) > 0 {
 					m.editValue = m.editValue[:len(m.editValue)-1]
 				}
+			case tea.KeySpace:
+				m.editValue += " "
 			default:
 				if msg.Type == tea.KeyRunes {
 					m.editValue += string(msg.Runes)
@@ -259,17 +261,17 @@ func (m model) View() string {
 
 			if i == m.cursor {
 				if b.Name != "" {
-					s += renderSelected(fmt.Sprintf("> %s", displayName))
+					s += fmt.Sprintf("  > %s", renderSelected(displayName))
 					s += dimStyle.Render(fmt.Sprintf(" %s", b.Path))
 				} else {
-					s += renderSelected(fmt.Sprintf("> %s", displayName))
+					s += fmt.Sprintf("  > %s", renderSelected(displayName))
 				}
 			} else {
 				if b.Name != "" {
-					s += normalStyle.Render(fmt.Sprintf("  %s", displayName))
+					s += fmt.Sprintf("    %s", displayName)
 					s += dimStyle.Render(fmt.Sprintf(" %s", b.Path))
 				} else {
-					s += normalStyle.Render(fmt.Sprintf("  %s", displayName))
+					s += fmt.Sprintf("    %s", displayName)
 				}
 			}
 			s += "\n"
@@ -298,8 +300,16 @@ func addBookmark() {
 		}
 	}
 
+	// Prompt for alias
+	fmt.Printf("Adding: %s\n", cwd)
+	fmt.Print("Alias (enter to skip): ")
+	reader := bufio.NewReader(os.Stdin)
+	alias, _ := reader.ReadString('\n')
+	alias = strings.TrimSpace(alias)
+
 	config.Bookmarks = append(config.Bookmarks, Bookmark{
 		Path:  cwd,
+		Name:  alias,
 		Count: 0,
 	})
 
@@ -308,7 +318,11 @@ func addBookmark() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Added bookmark: %s\n", cwd)
+	if alias != "" {
+		fmt.Printf("Added bookmark: %s (%s)\n", alias, cwd)
+	} else {
+		fmt.Printf("Added bookmark: %s\n", cwd)
+	}
 }
 
 func main() {
